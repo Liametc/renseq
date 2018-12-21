@@ -1,0 +1,159 @@
+#!/bin/env python
+
+import argparse
+import itertools
+import os
+import shutil
+import sys
+
+
+def create_parser():
+    description = ("Rename and/or renumber a file.\n"
+        "Set the padding on the source and destination files using c-style formatting "
+        "(e.g. \"%04d\" for 4 number padding)."
+    )
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "source",
+        help="The source sequence template."
+    )
+    parser.add_argument(
+        "--destination",
+        "-d",
+        required=False,
+        help="The destination template. If not passed, uses the source and assumes renumbering of files."
+    )
+    parser.add_argument(
+        "--first",
+        "-f",
+        required=True,
+        type=int,
+        help="The first frame of the original sequence."
+    )
+    parser.add_argument(
+        "--last",
+        "-l",
+        required=True,
+        type=int,
+        help="The last frame of the original sequence."
+    )
+    parser.add_argument(
+        "--start",
+        "-s",
+        required=True,
+        type=int,
+        help="The new start frame."
+    )
+    parser.add_argument(
+        "--step",
+        "-x",
+        default=1,
+        type=int,
+        help="The step between frames (default=1)."
+    )
+    parser.add_argument(
+        "--respect-breaks",
+        "-b",
+        action="store_true",
+        help="Respect the breaks in source sequences, otherwise create a contiguous sequence (default)."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run mode."
+    )
+    return parser
+
+
+def rename(src, dest, dry_run):
+    print "Copying '{}' -> '{}'".format(src, dest)
+    if not dry_run:
+        try:
+            shutil.copy2(src, dest)
+        except:
+            print "A copying error has occured", sys.exc_info[1]
+            raise
+        else:
+            print "Copy complete, removing source."
+            os.remove(src)
+
+
+def try_rename(sources, destinations, dry_run):
+    visited = []
+    for source, dest in itertools.izip(sources, destinations):
+        try:
+            rename(source, dest, dry_run)
+            visited.append((dest, source))
+        except Exception as err:
+            print str(err)
+            print "Reverting changes..."
+            for src, dst in visited:
+                rename(src, dst, dry_run)
+            return False
+    return True
+
+
+def rename_files(src, dest, first, last, start, step, breaks, dry_run):
+    if not dest:
+        dest = src
+    
+    use_temp = dest == src and start >= first and start <= last
+    
+    new_frame = itertools.count(start, step)
+    frames = xrange(first, last+1)
+    
+    sources = []
+    temp_destinations = []
+    destinations = []
+    
+    for frame in frames:
+        source = src % frame
+        if not os.path.exists(source):
+            print "'{}' does not exist. Skipping...".format(source)
+            if breaks:
+                print "Advancing new frame number to respect sequence break"
+                new_frame.next()
+            continue
+        sources.append(source)
+        destination = dest % new_frame.next()
+        destinations.append(destination)
+        temp_dest = "TMP" + destination
+        temp_destinations.append(temp_dest)
+    
+    if any(map(os.path.exists, set(destinations) - set(sources))):
+        result = input("Some destination paths are going to overwrite existing files. Continue anyway? y/n")
+        while result not in ["y", "n"]:
+            result = input("ERROR: Response must be either 'y' or 'n'")
+        if result == "n":
+            return
+    
+    if use_temp:        
+        print "Copying to temp location..."
+        if not try_rename(sources, temp_destinations, dry_run):
+            return
+    else:
+        temp_destinations = sources
+        
+    print "Copying to final location..."
+    if not try_rename(temp_destinations, destinations, dry_run) and use_temp:
+        for source, temp in itertools.izip(sources, temp_destinations):
+            rename(temp, source, dry_run)
+        
+    print "COMPLETE!"
+
+
+if __name__ == "__main__":
+    parser = create_parser()
+    args = parser.parse_args()
+
+    rename_files(
+        args.source,
+        args.destination,
+        args.first,
+        args.last,
+        args.start,
+        args.step,
+        args.respect_breaks,
+        args.dry_run
+    )
+    sys.exit()
