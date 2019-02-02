@@ -121,7 +121,7 @@ def rename_files(src, dest, first, last, start, step, breaks, dry_run):
         temp_destinations.append(temp_dest)
     
     if any(map(os.path.exists, set(destinations) - set(sources))):
-        result = input("Some destination paths are going to overwrite existing files. Continue anyway? y/n")
+        result = raw_input("Some destination paths are going to overwrite existing files. Continue anyway? y/n")
         while result not in ["y", "n"]:
             result = input("ERROR: Response must be either 'y' or 'n'")
         if result == "n":
