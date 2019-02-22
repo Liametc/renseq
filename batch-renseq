@@ -1,0 +1,15 @@
+#! /bin/env bash
+
+# update this list with the pass name
+declare -a arr=(
+"beauty"
+)
+
+## now loop through the above array
+for i in "${arr[@]}"
+do
+   echo $i
+# this runs the renseq script, adjust accordingly. "$1" is the substitute for the pass name
+   yes | renseq "<src>" -d "<dest>" -f 1 -l 100 --step 1 -s 1
+   
+done
